@@ -29,7 +29,7 @@ for col in numeric_columns:
     if col in listing.columns:
         listing[col] = pd.to_numeric(listing[col])
 
-#invalid numeric data
+#invalid numeric data --how to flag?
     #sold
 sold['invalid_closeprice_flag'] = sold['ClosePrice'] <= 0
 sold['invalid_livingarea_flag'] = sold['LivingArea'] <= 0
@@ -58,3 +58,7 @@ print('Invalid Living Areas:', listing['invalid_livingarea_flag'].sum())
 print('Negative Days on Market:', listing['invalid_daysonmarket_flag'].sum())
 print('Negative Bedrooms:', listing['invalid_bedrooms_flag'].sum())
 print('Negative Bathrooms:', listing['invalid_bathrooms_flag'].sum())
+
+#csv
+sold.to_csv('w45_CRMLSSoldCleaned.csv')
+listing.to_csv('w45_CRMLSListingCleaned.csv')
