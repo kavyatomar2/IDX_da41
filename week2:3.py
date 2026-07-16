@@ -1,7 +1,7 @@
 import pandas as pd
 
-sold = pd.read_csv("CRMLSSoldCombined.csv", low_memory=False)
-listings = pd.read_csv("CRMLSListingCombined.csv", low_memory=False)
+sold = pd.read_csv("w1_CRMLSListingCombined_Unfiltered.csv", low_memory=False)
+listings = pd.read_csv("w1_CRMLSSoldCombined_Unfiltered.csv", low_memory=False)
 
 #row/col counts
 print('Sold dataset (rows,cols):', sold.shape)
@@ -28,81 +28,111 @@ print(f'ClosePrice: {soldFiltered['ClosePrice'].describe()}')
 print(f'LivingArea: {soldFiltered['LivingArea'].describe()}')
 print(f'DaysOnMarket: {soldFiltered['DaysOnMarket'].describe()}')
 
-soldFiltered.to_csv("CRMLSSoldFiltered.csv", index=False)
-listingsFiltered.to_csv("CRMLSListingFiltered.csv", index=False)
+soldFiltered.to_csv("w23_CRMLSSoldFiltered.csv", index=False)
+listingsFiltered.to_csv("w23_CRMLSListingFiltered.csv", index=False)
 
-#Sold rows/cols: 455658, 80
-#Listing rows/cols: 504466, 82
+# Sold dataset (rows,cols): (766706, 81)
+# Listings dataset (rows, cols): (680885, 79)
+# Unique Sold: <StringArray>
+# [               'Land',         'Residential',    'ResidentialLease',
+#       'CommercialSale',  'ManufacturedInPark', 'BusinessOpportunity',
+#      'CommercialLease',   'ResidentialIncome']
+# Length: 8, dtype: str
+# Unique Listings: <StringArray>
+# [        'Residential',                'Land',  'ManufacturedInPark',
+#    'ResidentialIncome',    'ResidentialLease',      'CommercialSale',
+#      'CommercialLease', 'BusinessOpportunity']
+# Length: 8, dtype: str
+#                               Null Count  Null Percentage
+# OriginalListPrice                    931             0.18
+# ListingKey                             0             0.00
+# CloseDate                          79977            15.85
+# ClosePrice                         82895            16.43
+# ListAgentFirstName                  3320             0.66
+# ...                                  ...              ...
+# BuyerOfficeName.1                  86298            17.11
+# AssociationFee                    113191            22.44
+# LotSizeSquareFeet                  39060             7.74
+# MiddleOrJuniorSchoolDistrict      504466           100.00
+# UnparsedAddress.1                    645             0.13
 
-#Unique Sold Property Types: Residential !!!!!
-#Unique Listings Property Types: Residential  !!!!!!
+# [81 rows x 2 columns]
+# Flagged cols:  Index(['FireplacesTotal', 'AboveGradeFinishedArea', 'TaxAnnualAmount',
+#        'BuilderName', 'TaxYear', 'BuildingAreaTotal',
+#        'ElementarySchoolDistrict', 'CoBuyerAgentFirstName',
+#        'BelowGradeFinishedArea', 'BusinessType', 'CoveredSpaces',
+#        'LotSizeDimensions', 'MiddleOrJuniorSchoolDistrict'],
+#       dtype='str')
+# ClosePrice: count    4.215710e+05
+# mean     1.127716e+06
+# std      1.228588e+06
+# min      5.250000e+02
+# 25%      5.760000e+05
+# 50%      8.200000e+05
+# 75%      1.295000e+06
+# max      1.100000e+08
+# Name: ClosePrice, dtype: float64
+# LivingArea: count    5.041170e+05
+# mean     1.923460e+03
+# std      2.399811e+04
+# min      0.000000e+00
+# 25%      1.248000e+03
+# 50%      1.650000e+03
+# 75%      2.245000e+03
+# max      1.702132e+07
+# Name: LivingArea, dtype: float64
+# DaysOnMarket: count    504466.000000
+# mean         36.763663
+# std          52.999819
+# min        -265.000000
+# 25%           8.000000
+# 50%          18.000000
+# 75%          47.000000
+# max       12430.000000
+# Name: DaysOnMarket, dtype: float64
+# 135300
+# 101
 
-# Flagged cols: ['WaterfrontYN', 'BasementYN', 'FireplacesTotal',
-#        'AboveGradeFinishedArea', 'TaxAnnualAmount', 'BuilderName', 'TaxYear',
-#        'BuildingAreaTotal', 'ElementarySchoolDistrict',
-#        'CoBuyerAgentFirstName', 'BelowGradeFinishedArea', 'BusinessType',
-#        'CoveredSpaces', 'LotSizeDimensions', 'MiddleOrJuniorSchoolDistrict']
+# Step 1 – Fetch the mortgage rate data from FRED
+import pandas as pd
+url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=MORTGAGE30US"
+mortgage = pd.read_csv(url, parse_dates=['observation_date'])
+mortgage.columns = ['date', 'rate_30yr_fixed']
 
-# ClosePrice: 
-# count    455656.0
-# mean     1124047
-# std      1264029
-# min      525
-# 25%      571745.80
-# 50%      815000
-# 75%      1280000
-# max      110000000
+# Step 2 – Resample weekly rates to monthly averages
+mortgage['year_month'] = mortgage['date'].dt.to_period('M')
+mortgage_monthly = (
+ mortgage.groupby('year_month')['rate_30yr_fixed']
+ .mean()
+ .reset_index()
+)
 
-# LivingArea: 
-# count    455388
-# mean     1900.14
-# std      25240.96
-# min      0.00
-# 25%      1248
-# 50%      1643
-# 75%      2220
-# max      1702132
+# Step 3 – Create a matching year_month key on the MLS datasets
+# Sold dataset — key off CloseDate
+sold['year_month'] = pd.to_datetime(sold['CloseDate']).dt.to_period('M')
+# Listings dataset — key off ListingContractDate
+listings['year_month'] = pd.to_datetime(
+ listings['ListingContractDate']
+).dt.to_period('M')
 
-# DaysOnMarket: 
-# count    455658.000000
-# mean         37.629472
-# std          53.789324
-# min        -288
-# 25%           8
-# 50%          19
-# 75%          49
-# max       12430
+# Step 4 – Merge
+sold_with_rates = sold.merge(mortgage_monthly, on='year_month', how='left')
+listings_with_rates = listings.merge(mortgage_monthly, on='year_month', how='left')
 
-#mortgage rates from FRED
-fred_url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=MORTGAGE30US"
-mortgage_rates = pd.read_csv(fred_url, parse_dates=["observation_date"])
-mortgage_rates.columns = ["date", "rate_30yr_fixed"]
+# Step 5 – Validate the merge
+# Check for any unmatched rows (rate should not be null)
+print(sold_with_rates['rate_30yr_fixed'].isnull().sum())
+print(listings_with_rates['rate_30yr_fixed'].isnull().sum())
+# Preview
+print(
+ sold_with_rates[
+ ['CloseDate', 'year_month', 'ClosePrice', 'rate_30yr_fixed']
+ ].head()
+)
 
-#monthly avg rates
-mortgage_rates["year_month"] = mortgage_rates["date"].dt.to_period("M")
-monthly_rates = (mortgage_rates.groupby("year_month")["rate_30yr_fixed"].mean().reset_index())
-
-#load files
-sold = pd.read_csv("CRMLSSoldCombined.csv", low_memory=False)
-listings = pd.read_csv("CRMLSListingCombined.csv", low_memory=False)
-
-# year/month keys
-sold["year_month"] = pd.to_datetime(sold["CloseDate"], format="mixed").dt.to_period("M")
-listings["year_month"] = pd.to_datetime(listings["ListingContractDate"],format="mixed").dt.to_period("M")
-
-#merge mortgage rates
-sold_enriched = sold.merge(monthly_rates, on="year_month", how="left")
-listings_enriched = listings.merge(monthly_rates, on="year_month", how="left")
-
-#validation
-print("Missing sold mortgage rates:",sold_enriched["rate_30yr_fixed"].isna().sum())
-print("Missing listing mortgage rates:", listings_enriched["rate_30yr_fixed"].isna().sum())
-assert sold_enriched["rate_30yr_fixed"].isna().sum() == 0
-assert listings_enriched["rate_30yr_fixed"].isna().sum() == 0
-print("Validation passed!")
-
-sold_enriched.to_csv("CRMLSSold_MortgageRates.csv", index=False)
-listings_enriched.to_csv("CRMLSListing_MortgageRates.csv", index=False)
-
-#Missing sold mortgage rates: 0
-#Missing listing mortgage rates: 0
+#     CloseDate year_month  ClosePrice  rate_30yr_fixed
+# 0         NaN        NaT         NaN              NaN
+# 1         NaN        NaT         NaN              NaN
+# 2  2026-05-11    2026-05    320000.0           6.4425
+# 3         NaN        NaT         NaN              NaN
+# 4  2026-04-01    2026-04      3599.0           6.3320
